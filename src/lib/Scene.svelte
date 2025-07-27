@@ -1,9 +1,9 @@
 <script>
-        // @ts-nocheck
 
   import { T, useTask, useThrelte } from '@threlte/core';
   import { OrbitControls } from '@threlte/extras';
   import { onMount } from 'svelte';
+  import { MediaQuery } from 'svelte/reactivity';
   import { Color, Mesh, PMREMGenerator, PlaneGeometry, Raycaster, Vector2, Vector3 } from 'three';
   import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
   import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
@@ -13,6 +13,9 @@
   import Stars from './Stars.svelte';
 
   const { scene, camera, renderer } = useThrelte()
+  /**
+	 * @type {{ visible: boolean; traverse: (arg0: (child: any) => void) => void; }}
+	 */
   let spaceShipRef
   let intersectionPoint
   let translY = 0
@@ -20,6 +23,9 @@
   let angleZ = 0
   let angleAccelleration = 0
   let pmrem = new PMREMGenerator(renderer)
+  /**
+	 * @type {import("three").WebGLRenderTarget<import("three").Texture>}
+	 */
   let envMapRT
 
   const composer = new EffectComposer(renderer)
@@ -42,12 +48,14 @@
   useTask(
     () => {
       if (intersectionPoint) {
+        // @ts-ignore
         const targetY = intersectionPoint?.y || 0
         translAccelleration += (targetY - translY) * 0.002 // stiffness
         translAccelleration *= 0.95 // damping
         translY += translAccelleration
 
         const dir = intersectionPoint
+          // @ts-ignore
           .clone()
           .sub(new Vector3(0, translY, 0))
           .normalize()
@@ -81,6 +89,9 @@
     }
   )
 
+  let isMobile = new MediaQuery('(max-width: 768px)');
+
+
   onMount(() => {
     setupEffectComposer()
 
@@ -105,22 +116,22 @@
     //   }
     // }
 
-    window.addEventListener('pointermove', onPointerMove)
-    return () => {
-      window.removeEventListener('pointermove', onPointerMove)
-    }
+    // window.addEventListener('pointermove', onPointerMove)
+    // return () => {
+    //   window.removeEventListener('pointermove', onPointerMove)
+    // }
   })
 </script>
 
 <T.PerspectiveCamera
   makeDefault
-  position={[-10, 6, 10]}
-  fov={36}
+  position={isMobile.current ?[-12, 2, -5] : [-8, 6, 10]}
+  fov={isMobile.current ? 48 : 24}
 >
   <OrbitControls
     enableDamping
     autoRotate
-    autoRotateSpeed={1.5}
+    autoRotateSpeed={isMobile.current ? 2 : 0.5}
     dampingFactor={0.1}
     target={[0, 0, 0]}
   />
