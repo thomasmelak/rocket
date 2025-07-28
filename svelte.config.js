@@ -6,18 +6,20 @@ const config = {
 	// Consult https://svelte.dev/docs/kit/integrations
 	// for more information about preprocessors
 	preprocess: vitePreprocess(),
-	paths: {
-			base: '/rocket'
-		},
-	kit: { adapter: adapter({
-	
-		pages: 'build',
+
+	kit: {
+			paths: {
+		base: '/rocket'
+	},
+		adapter: adapter({
+			pages: 'build',
 			assets: 'build',
 			precompress: true,
 			strict: true,
 
 			fallback: 'index.html' // may differ from host to host
-	}) }
+		})
+	}
 };
 
 export default config;
