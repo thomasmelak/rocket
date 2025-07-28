@@ -11,7 +11,7 @@
   let stars: any[] = []
   
 
-  const map = useTexture('/star.png')
+  const map = useTexture('/rocket/star.png')
 
   function r(min: number, max: number) {
     let diff = Math.random() * (max - min)
