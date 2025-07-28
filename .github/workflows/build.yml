@@ -22,8 +22,6 @@ jobs:
           node-version: 22.x
       - name: Install node packages
         run: npm i
-      - name: Build tailwind
-        run: npm run build:tailwind
       - name: Build project
         run: npm run build
       - name: Upload GitHub Pages artifact
