@@ -121,4 +121,5 @@ Component tree: `+layout` → `+page` → `<Canvas>` → `Scene` → { camera + 
 - **Mixed style**: `Scene` is plain JS with `@ts-ignore`, `Stars` is `@ts-nocheck`, and
   `spaceship` uses legacy slots. `.prettierrc` uses tabs, but these files use 2 spaces.
 - The CI workflow deploys on PRs too and has no `environment: github-pages` block.
+  It uses `npm i` rather than `npm ci`. Pages source must be set to "GitHub Actions".
 - `package.json` name is `rocket-ship`; `README.md` is the unmodified `sv` template.

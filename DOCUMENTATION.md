@@ -216,6 +216,10 @@ versus ~45 MB total at 1K. Only the transfer size shrank.
   `upload-pages-artifact` (path `build`) → `deploy-pages`.
 - Permissions: `id-token: write`, `pages: write`.
 - CI does **not** run `check` or `lint`.
+- The repo's Pages source must be set to **GitHub Actions** (Settings → Pages)
+  for `deploy-pages` to publish.
+- `npm i` is used although `package-lock.json` is committed; `npm ci` would give
+  reproducible installs.
 
 ---
 
@@ -258,6 +262,7 @@ ESLint errors:
    Svelte 4 `$$restProps` and `<slot>`. Formatting is also mixed: `.prettierrc` uses
    tabs, while these three files use 2 spaces.
 6. **CI deploys on pull requests**, not only on `main`, and the job has no
-   `environment: github-pages` block.
+   `environment: github-pages` block or `contents: read` permission. Consider
+   splitting it into build and deploy jobs, with deploy gated to `main`.
 7. **Template leftovers**: the `package.json` name is `rocket-ship`, and
    `README.md` is the stock `sv` template.
