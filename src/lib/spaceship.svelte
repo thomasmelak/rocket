@@ -7,9 +7,12 @@ Source: https://sketchfab.com/3d-models/rusty-spaceship-orange-18541ebed6ce44a99
 Title: Rusty Spaceship - Orange
 -->
 <script lang="ts">
-  import { T, useThrelte } from '@threlte/core';
+  import { T, useTask, useThrelte } from '@threlte/core';
   import { useGltf, useTexture, type ThrelteGltf } from '@threlte/extras';
   import { AddEquation, Color, CustomBlending, Group, LessEqualDepth, Mesh, OneFactor, type Material, type Texture } from 'three';
+
+  import { config } from './config.svelte';
+  import { applyShipPaint, setShipPaint } from './shipPaint';
 
   export const ref = new Group()
 
@@ -36,7 +39,17 @@ Title: Rusty Spaceship - Orange
   function prepare(model: ThrelteGltf) {
     alphaFix(model.materials.spaceship_racer)
     alphaFix(model.materials.cockpit)
+    applyShipPaint(model.materials.spaceship_racer)
   }
+
+  // Push the configured hull color into the paint shader's uniforms when it changes.
+  let appliedPaint = ''
+  useTask(() => {
+    const paint = `${config.shipColor}/${config.shipTint}`
+    if (paint === appliedPaint) return
+    appliedPaint = paint
+    setShipPaint(config.shipColor, config.shipTint)
+  }, { autoInvalidate: false })
 
   // Frees the GPU memory held by the 1K model once the 4K one is displayed.
   function disposeModel(model: ThrelteGltf) {

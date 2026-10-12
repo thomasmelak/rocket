@@ -61,11 +61,14 @@ rocket/
 │   ├── app.d.ts                  SvelteKit ambient types (template)
 │   ├── routes/
 │   │   ├── +layout.svelte        Loads app.css, renders the page
-│   │   └── +page.svelte          Full-screen <Canvas> containing <Scene/>
+│   │   └── +page.svelte          Full-screen <Canvas> containing <Scene/>, plus <Configurator/>
 │   └── lib/
 │       ├── Scene.svelte          Camera, controls, render pipeline, env map
 │       ├── spaceship.svelte      Spaceship model + engine beam
 │       ├── Stars.svelte          Instanced, streaking stars
+│       ├── Configurator.svelte   HTML overlay for ship and star colors
+│       ├── config.svelte.ts      Shared color config ($state), saved to localStorage
+│       ├── shipPaint.ts          Hue-shift shader patch that repaints the hull
 │       └── index.ts              Empty $lib barrel
 ├── static/                       Copied as-is into build/
 │   ├── spaceship-1k.glb          4.3 MB — shown first (PNG textures, 1024²)
@@ -92,11 +95,15 @@ rocket/
             ├── PerspectiveCamera + OrbitControls
             ├── spaceship.svelte   (bind:ref → spaceShipRef)
             └── Stars.svelte
+    └── Configurator.svelte (HTML overlay, outside the Canvas)
 ```
 
+`config.svelte.ts` holds module-level `$state` shared by `Configurator` (writes)
+and `spaceship` / `Stars` (read it every frame in `useTask`).
+
 ### 4.1 `src/routes/+page.svelte`
-Mounts a Threlte `<Canvas>` inside a full-viewport `div` and renders `<Scene />`.
-This is the app's only route.
+Mounts a Threlte `<Canvas>` inside a full-viewport `div` and renders `<Scene />`,
+then `<Configurator />` on top of it. This is the app's only route.
 
 ### 4.2 `src/lib/Scene.svelte` — scene and render loop
 **Camera and controls**
@@ -138,6 +145,10 @@ are never used, so the ship stays at the origin.
   progressively (see 4.3.1).
 - `alphaFix()` sets the `spaceship_racer` and `cockpit` materials to
   transparent, with alpha-to-coverage and `LessEqualDepth` depth testing and writing.
+- **Hull color**: `prepare()` calls `applyShipPaint()` (`shipPaint.ts`) on the
+  `spaceship_racer` material, so the 4K model gets it too. A `useTask` pushes
+  `config.shipColor` / `config.shipTint` into the shader uniforms when they change
+  (see 4.5).
 - Renders 13 meshes (hull, engines, panels, cockpit, canopy sphere) in a group
   scaled 0.003, rotated −90° on Y and offset to `[0.95, 0, -2.235]`.
 - **Engine beam**: an open cone (`CylinderGeometry` radius 64→0, length
@@ -196,10 +207,31 @@ versus ~45 MB total at 1K. Only the transfer size shrank.
 - `resetStar()` randomizes each star:
   - 20%: near band — x ∈ [-30, -10], y ∈ [-5, 5], z ∈ [-6, 6], length 1.5–15
   - 80%: far field — x ∈ [-45, -15], y ∈ [-10.5, 1.5], z ∈ [-45, 30], length 2.5–20
-  - speed 19.5–42 units/s; color from `#F46036 #EFCA08 #593C8F #E71D36 #BBDEF0`
-    (converted to linear, ×1.3 so the bloom catches it)
+  - speed 19.5–42 units/s; a random `colorSlot` ∈ [0, 1) that picks from
+    `config.starColors` (default `#F46036 #EFCA08 #593C8F #E71D36 #BBDEF0`,
+    converted to linear, ×1.3 so the bloom catches it)
+- When the palette changes, the `useTask` recolors every star in place using its
+  slot, so edits show immediately and each color stays equally likely.
 - Each frame, every star moves along +X by `speed × delta`; past `x > 50` it is
   re-randomized. `stars = stars` triggers Svelte reactivity to update the instances.
+
+### 4.5 Color configurator
+- **`config.svelte.ts`**: `config = $state({ shipColor, shipTint, starColors })`.
+  Loaded once from `localStorage['rocket:config:v1']`. Every field is validated
+  (6-digit hex, tint 0–1, 1–8 star colors), and invalid data falls back to defaults.
+  An `$effect.root` saves changes debounced by 200 ms. `resetConfig()` restores defaults.
+  Storage access is wrapped in try/catch, so blocked storage just means nothing persists.
+- **`shipPaint.ts`**: an `onBeforeCompile` patch that runs `repaint()` right after
+  `#include <map_fragment>`. It rotates the hue of the base color texture from the
+  original paint (median HSV `0.033, 0.8, 0.55`, measured from the 1K texture)
+  to the target color, scales saturation and value (value clamped ×0.25–1.25),
+  masks by saturation so grey metal is untouched, and mixes by `shipTint`
+  (0 = original look). The uniforms are shared module state, so updates never
+  recompile the shader.
+- **`Configurator.svelte`**: a palette button (top right) toggles a panel with ship
+  presets, an "Original" option, a custom color picker and a strength slider, plus
+  1–8 editable star colors (add/remove) and "Reset to defaults". Whether the panel
+  is open is stored in `localStorage['rocket:configurator-open']`.
 
 ---
 
@@ -230,13 +262,12 @@ versus ~45 MB total at 1K. Only the transfer size shrank.
 | `npm ci` | ✅ |
 | `npm run build` | ✅ — writes the site to `build/` |
 | `npm run check` | ❌ 1 error — `Scene.svelte`: the JSDoc type on `spaceShipRef` isn't assignable to `Group` for `bind:ref` |
-| `eslint .` | ❌ 11 errors (see below) |
+| `eslint .` | ❌ 10 errors (see below) |
 
 ESLint errors:
 - `Scene.svelte`: 2× `@ts-ignore` (should be `@ts-expect-error`); unused `mesh`,
   `raycaster` and `pointer` (left over from the disabled mouse-follow).
-- `Stars.svelte`: 2× `no-explicit-any`; raw store access to `map`; `{#each}`
-  without a key.
+- `Stars.svelte`: 2× `no-explicit-any`; raw store access to `map`.
 - `spaceship.svelte`: 2× raw store access to `lowRes` / `map` (the loaders return
   Promise-like stores that are used with `.then` / `{#await}`).
 
