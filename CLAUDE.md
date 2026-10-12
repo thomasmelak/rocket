@@ -49,8 +49,8 @@ src/
     Stars.svelte        150 instanced streaking stars
     index.ts            Empty ($lib barrel placeholder)
 static/                 Copied verbatim into build/
-  spaceship-1k.glb      4.3 MB, the model in use
-  spaceship-4k.glb      33 MB, not referenced (but still deployed)
+  spaceship-1k.glb      4.3 MB, shown first (PNG, 1024² textures)
+  spaceship-4k.glb      13 MB, swapped in when loaded (WebP, 4096² textures)
   energy-beam-opacity.png  Alpha map for the engine beam
   star.png              Alpha map for star streaks
   favicon.svg
@@ -73,7 +73,15 @@ Component tree: `+layout` → `+page` → `<Canvas>` → `Scene` → { camera + 
   `pointermove` handler is commented out. Its `mesh`/`raycaster`/`pointer` objects are unused.
 
 ### `spaceship.svelte`
-- Loads `/rocket/spaceship-1k.glb` and `/rocket/energy-beam-opacity.png`.
+- **Progressive loading:** `useGltf` loads `spaceship-1k.glb` and renders it. After it
+  resolves, `useGltf().load()` fetches `spaceship-4k.glb`, but only when
+  `maxTextureSize >= 4096` and Save-Data is off (`canUseHiRes()`). When the 4K model arrives,
+  `hiRes` is set, `{@const gltf = hiRes ?? lowResGltf}` swaps meshes in place, and the 1K
+  model's GPU resources are disposed. If the 4K load fails, the 1K model stays.
+- **Both GLBs must keep identical node and material names**, because the swap depends on it.
+  See DOCUMENTATION.md §4.3.2 for how the 4K file was optimized
+  (near-lossless WebP; lossy WebP looked barely better than the 1K).
+- Also loads `/rocket/energy-beam-opacity.png`.
 - `alphaFix` makes the `spaceship_racer` and `cockpit` materials transparent with alpha-to-coverage.
 - Renders 13 GLTF meshes in a group scaled 0.003, plus an additive-blended
   orange-red open cone as the engine beam (`tail = 2000`).
@@ -108,7 +116,8 @@ Component tree: `+layout` → `+page` → `<Canvas>` → `Scene` → { camera + 
 - **Possible double render**: the `Canvas` doesn't set `autoRender={false}`, although
   `Scene`'s comment assumes it does. Verify before touching render code.
 - **PMREM env map is rebuilt every frame**, which is the main GPU cost.
-- **The 33 MB `spaceship-4k.glb` ships to Pages unused.**
+- **4K uses ~0.5 GB of VRAM** after the swap (WebP only shrinks the download). To skip it on
+  small screens or weak devices, extend `canUseHiRes()`.
 - **Mixed style**: `Scene` is plain JS with `@ts-ignore`, `Stars` is `@ts-nocheck`, and
   `spaceship` uses legacy slots. `.prettierrc` uses tabs, but these files use 2 spaces.
 - The CI workflow deploys on PRs too and has no `environment: github-pages` block.
