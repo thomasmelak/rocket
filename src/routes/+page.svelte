@@ -1,6 +1,7 @@
 <script lang="ts">
   // Ensure the path is correct and the file exists
 
+  import Configurator from '$lib/Configurator.svelte';
   import Scene from '$lib/Scene.svelte';
   import { Canvas } from '@threlte/core';
 </script>
@@ -10,6 +11,7 @@
   <Scene />
 </Canvas>
 </div>
+<Configurator />
 
 <style>
     div{
