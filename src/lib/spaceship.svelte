@@ -7,27 +7,69 @@ Source: https://sketchfab.com/3d-models/rusty-spaceship-orange-18541ebed6ce44a99
 Title: Rusty Spaceship - Orange
 -->
 <script lang="ts">
-  import { T } from '@threlte/core';
-  import { useGltf, useTexture } from '@threlte/extras';
-  import { AddEquation, Color, CustomBlending, Group, LessEqualDepth, OneFactor } from 'three';
+  import { T, useThrelte } from '@threlte/core';
+  import { useGltf, useTexture, type ThrelteGltf } from '@threlte/extras';
+  import { AddEquation, Color, CustomBlending, Group, LessEqualDepth, Mesh, OneFactor, type Material, type Texture } from 'three';
 
   export const ref = new Group()
 
-  const gltf = useGltf('/rocket/spaceship-1k.glb')
+  // Progressive loading: show the light 1K model (4.3 MB) first, then fetch the
+  // 4K model (13 MB) in the background and swap it in once it's ready. Both files
+  // share the same node and material names, so the meshes below work with either.
+  const lowRes = useGltf('/rocket/spaceship-1k.glb')
+  const hiResLoader = useGltf()
   const map = useTexture('/rocket/energy-beam-opacity.png')
+  const { renderer } = useThrelte()
+
+  let hiRes: ThrelteGltf | undefined
 
   const tail = 2000;
 
-  gltf.then((model) => {
-    function alphaFix(material: { transparent: boolean; alphaToCoverage: boolean; depthFunc: number; depthTest: boolean; depthWrite: boolean; }) {
-      material.transparent = true
-      material.alphaToCoverage = true
-      material.depthFunc = LessEqualDepth
-      material.depthTest = true
-      material.depthWrite = true
-    }
+  function alphaFix(material: { transparent: boolean; alphaToCoverage: boolean; depthFunc: number; depthTest: boolean; depthWrite: boolean; }) {
+    material.transparent = true
+    material.alphaToCoverage = true
+    material.depthFunc = LessEqualDepth
+    material.depthTest = true
+    material.depthWrite = true
+  }
+
+  function prepare(model: ThrelteGltf) {
     alphaFix(model.materials.spaceship_racer)
     alphaFix(model.materials.cockpit)
+  }
+
+  // Frees the GPU memory held by the 1K model once the 4K one is displayed.
+  function disposeModel(model: ThrelteGltf) {
+    model.scene.traverse((child) => {
+      if (!(child instanceof Mesh)) return
+      child.geometry.dispose()
+      const material = child.material as Material & Record<string, unknown>
+      for (const value of Object.values(material)) {
+        if ((value as Texture)?.isTexture) (value as Texture).dispose()
+      }
+      material.dispose()
+    })
+  }
+
+  function canUseHiRes() {
+    // 4K textures need GPU support, and users asking to save data shouldn't pay for 13 MB.
+    const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData
+    return renderer.capabilities.maxTextureSize >= 4096 && !saveData
+  }
+
+  lowRes.then((model) => {
+    prepare(model)
+    // Start the 4K download only after the 1K model has loaded, so it doesn't compete for bandwidth.
+    if (!canUseHiRes()) return
+    hiResLoader
+      .load('/rocket/spaceship-4k.glb')
+      .then((hiModel) => {
+        prepare(hiModel)
+        hiRes = hiModel
+        disposeModel(model)
+      })
+      // Keep showing the 1K model if the 4K one fails to load.
+      .catch((error) => console.warn('Could not load the 4K spaceship model', error))
   })
 </script>
 
@@ -36,9 +78,10 @@ Title: Rusty Spaceship - Orange
   dispose={false}
   {...$$restProps}
 >
-  {#await gltf}
+  {#await lowRes}
     <slot name="fallback" />
-  {:then gltf}
+  {:then lowResGltf}
+    {@const gltf = hiRes ?? lowResGltf}
     <T.Group
       scale={0.003}
       rotation={[0, -Math.PI * 0.5, 0]}
